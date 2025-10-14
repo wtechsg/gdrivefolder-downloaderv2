@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Google Drive Folder Downloader</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      text-align: center;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 16px;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    #fileList {
+      margin-top: 20px;
+      text-align: left;
+    }
+
+    .file {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid #eee;
+      padding: 6px 0;
+    }
+
+    .file input[type="checkbox"] {
+      flex: 0 0 20px;
+      margin-right: 10px;
+    }
+
+    .file-name {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <h2>Google Drive Folder Downloader</h2>
+  <p>Paste a <strong>public shared Google Drive folder link</strong> below:</p>
+  <input id="folderLink" type="text" placeholder="https://drive.google.com/drive/folders/FOLDER_ID" />
+  <button onclick="listFiles()">List Files</button>
+  <p id="status" class="error"></p>
+
+  <div id="controls" class="controls" style="display:none;">
+    <label><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> Select All</label>
+    <button onclick="downloadSelected()">Download Selected Files</button>
+  </div>
+
+  <div id="fileList"></div>
+
+  <script>
+    const API_KEY = 'AIzaSyA-MD2LyqhzFQ0QPMjMU6AVDvSRHCLADY8'; // Replace with your key
+
+    function extractFolderId(url) {
+      const match = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+      return match ? match[1] : null;
+    }
+
+    async function listFiles() {
+      const folderUrl = document.getElementById('folderLink').value.trim();
+      const folderId = extractFolderId(folderUrl);
+      const status = document.getElementById('status');
+      const output = document.getElementById('fileList');
+      const controls = document.getElementById('controls');
+      status.textContent = '';
+      output.innerHTML = '';
+      controls.style.display = 'none';
+
+      if (!folderId) {
+        status.textContent = 'Invalid folder link.';
+        return;
+      }
+
+      const endpoint = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&key=${API_KEY}&fields=files(id,name,mimeType)`;
+
+      try {
+        const res = await fetch(endpoint);
+        const data = await res.json();
+
+        if (!data.files || data.files.length === 0) {
+          status.textContent = 'No public files found.';
+          return;
+        }
+
+        controls.style.display = 'flex';
+
+        data.files.forEach(file => {
+          const div = document.createElement('div');
+          div.className = 'file';
+          div.innerHTML = `
+            <input type="checkbox" class="fileCheckbox" data-id="${file.id}" data-name="${file.name}">
+            <div class="file-name">${file.name}</div>
+          `;
+          output.appendChild(div);
+        });
+      } catch (err) {
+        status.textContent = 'Error fetching files.';
+        console.error(err);
+      }
+    }
+
+    function toggleSelectAll() {
+      const checked = document.getElementById('selectAll').checked;
+      document.querySelectorAll('.fileCheckbox').forEach(cb => cb.checked = checked);
+    }
+
+    async function downloadSelected() {
+      const selected = document.querySelectorAll('.fileCheckbox:checked');
+      if (selected.length === 0) {
+        alert("No files selected.");
+        return;
+      }
+
+      for (const cb of selected) {
+        const fileId = cb.dataset.id;
+        const fileName = cb.dataset.name;
+        await downloadFile(fileId, fileName);
+      }
+    }
+
+    async function downloadFile(fileId, fileName) {
+      const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Download failed');
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        a.click();
+      } catch (err) {
+        alert(`Failed to download ${fileName}`);
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
