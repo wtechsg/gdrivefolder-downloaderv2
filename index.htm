@@ -246,9 +246,11 @@
             // Clicking a folder row navigates into it instead of offering a checkbox,
             // since folders have no downloadable bytes of their own.
             div.innerHTML = `
-              <span style="flex:0 0 20px;">📁</span>
+              <span style="flex:0 0 24px; font-size:18px;">📁</span>
               <div class="file-name folder">${safeName}</div>
+              <span style="flex:0 0 auto; font-size:11px; font-weight:bold; color:#1a73e8; border:1px solid #1a73e8; border-radius:4px; padding:2px 6px; margin-left:8px;">FOLDER — CLICK TO OPEN</span>
             `;
+            div.style.background = '#eef4ff';
             div.addEventListener('click', () => navigateInto(file.id, file.name));
           } else {
             div.innerHTML = `
@@ -388,5 +390,6 @@
       }
     }
   </script>
+  <p style="margin-top:30px; font-size:11px; color:#bbb; text-align:center;">Build: folder-nav-v2</p>
 </body>
 </html>
