@@ -50,8 +50,39 @@
     }
 
     .file-name.folder {
-      color: #888;
-      font-style: italic;
+      color: #1a73e8;
+      font-style: normal;
+      cursor: pointer;
+    }
+
+    .file-name.folder:hover {
+      text-decoration: underline;
+    }
+
+    .file.folder-row:hover {
+      background: #f5f8ff;
+      cursor: pointer;
+    }
+
+    #breadcrumbs {
+      text-align: left;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #555;
+    }
+
+    #breadcrumbs .crumb {
+      color: #1a73e8;
+      cursor: pointer;
+    }
+
+    #breadcrumbs .crumb:hover {
+      text-decoration: underline;
+    }
+
+    #breadcrumbs .sep {
+      margin: 0 6px;
+      color: #aaa;
     }
 
     .file-status {
@@ -84,6 +115,8 @@
     <button onclick="downloadSelected()">Download Selected Files</button>
   </div>
 
+  <div id="breadcrumbs"></div>
+
   <div id="fileList"></div>
 
   <script>
@@ -111,6 +144,10 @@
     };
 
     const FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+    // Breadcrumb trail: array of { id, name }. The first entry is always the root folder
+    // the user originally pasted in.
+    let breadcrumbTrail = [];
 
     function extractFolderId(input) {
       const trimmed = input.trim();
@@ -151,47 +188,68 @@
     async function listFiles() {
       const folderUrl = document.getElementById('folderLink').value.trim();
       const folderId = extractFolderId(folderUrl);
+
+      if (!folderId) {
+        document.getElementById('status').textContent = 'Invalid folder link.';
+        return;
+      }
+
+      breadcrumbTrail = [{ id: folderId, name: 'Root' }];
+      await openFolder(folderId);
+    }
+
+    // Navigates into a given folder ID: fetches its contents and re-renders
+    // the list + breadcrumbs. Used both for the initial root folder and for
+    // any subfolder the user clicks into.
+    async function openFolder(folderId) {
       const status = document.getElementById('status');
       const loading = document.getElementById('loading');
       const output = document.getElementById('fileList');
       const controls = document.getElementById('controls');
+
       status.textContent = '';
       output.innerHTML = '';
       controls.style.display = 'none';
-
-      if (!folderId) {
-        status.textContent = 'Invalid folder link.';
-        return;
-      }
+      renderBreadcrumbs();
 
       loading.style.display = 'block';
 
       try {
-        const allFiles = await fetchAllFiles(folderId);
+        const allItems = await fetchAllFiles(folderId);
 
         loading.style.display = 'none';
 
-        if (allFiles.length === 0) {
-          status.textContent = 'No public files found.';
+        if (allItems.length === 0) {
+          status.textContent = 'This folder is empty.';
           return;
         }
 
-        controls.style.display = 'flex';
+        const hasDownloadableFiles = allItems.some(f => f.mimeType !== FOLDER_MIME);
+        controls.style.display = hasDownloadableFiles ? 'flex' : 'none';
 
-        allFiles.forEach(file => {
+        // Folders first, then files, each alphabetical — matches how Drive's own UI sorts.
+        allItems.sort((a, b) => {
+          const aFolder = a.mimeType === FOLDER_MIME;
+          const bFolder = b.mimeType === FOLDER_MIME;
+          if (aFolder !== bFolder) return aFolder ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        allItems.forEach(file => {
           const isFolder = file.mimeType === FOLDER_MIME;
           const safeName = escapeHtml(file.name);
 
           const div = document.createElement('div');
-          div.className = 'file';
+          div.className = isFolder ? 'file folder-row' : 'file';
 
           if (isFolder) {
-            // Folders have no downloadable content via alt=media, so don't
-            // offer a checkbox for them — just list them for visibility.
+            // Clicking a folder row navigates into it instead of offering a checkbox,
+            // since folders have no downloadable bytes of their own.
             div.innerHTML = `
-              <span style="flex:0 0 20px;"></span>
-              <div class="file-name folder">${safeName} (folder — not downloadable here)</div>
+              <span style="flex:0 0 20px;">📁</span>
+              <div class="file-name folder">${safeName}</div>
             `;
+            div.addEventListener('click', () => navigateInto(file.id, file.name));
           } else {
             div.innerHTML = `
               <input type="checkbox" class="fileCheckbox" data-id="${file.id}" data-name="${safeName}" data-mime="${escapeHtml(file.mimeType)}">
@@ -206,6 +264,41 @@
         status.textContent = 'Error fetching files.';
         console.error(err);
       }
+    }
+
+    // Pushes a folder onto the breadcrumb trail and opens it.
+    async function navigateInto(folderId, folderName) {
+      breadcrumbTrail.push({ id: folderId, name: folderName });
+      await openFolder(folderId);
+    }
+
+    // Jumps back to a specific point in the breadcrumb trail (truncating anything after it).
+    async function navigateToBreadcrumb(index) {
+      breadcrumbTrail = breadcrumbTrail.slice(0, index + 1);
+      await openFolder(breadcrumbTrail[index].id);
+    }
+
+    function renderBreadcrumbs() {
+      const container = document.getElementById('breadcrumbs');
+      if (breadcrumbTrail.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      container.innerHTML = breadcrumbTrail
+        .map((crumb, i) => {
+          const safeName = escapeHtml(crumb.name);
+          const isLast = i === breadcrumbTrail.length - 1;
+          const crumbHtml = isLast
+            ? `<span>${safeName}</span>`
+            : `<span class="crumb" data-index="${i}">${safeName}</span>`;
+          return i === 0 ? crumbHtml : `<span class="sep">/</span>${crumbHtml}`;
+        })
+        .join('');
+
+      container.querySelectorAll('.crumb').forEach(el => {
+        el.addEventListener('click', () => navigateToBreadcrumb(parseInt(el.dataset.index, 10)));
+      });
     }
 
     // Fetches every page of results for the folder, following nextPageToken.
