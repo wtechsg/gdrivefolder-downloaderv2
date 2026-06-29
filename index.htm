@@ -49,8 +49,25 @@
       text-overflow: ellipsis;
     }
 
+    .file-name.folder {
+      color: #888;
+      font-style: italic;
+    }
+
+    .file-status {
+      flex: 0 0 auto;
+      font-size: 12px;
+      color: #888;
+      margin-left: 8px;
+    }
+
     .error {
       color: red;
+    }
+
+    #loading {
+      display: none;
+      color: #666;
     }
   </style>
 </head>
@@ -60,6 +77,7 @@
   <input id="folderLink" type="text" placeholder="https://drive.google.com/drive/folders/FOLDER_ID" />
   <button onclick="listFiles()">List Files</button>
   <p id="status" class="error"></p>
+  <p id="loading">Loading files…</p>
 
   <div id="controls" class="controls" style="display:none;">
     <label><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> Select All</label>
@@ -71,15 +89,70 @@
   <script>
     const API_KEY = 'AIzaSyA-MD2LyqhzFQ0QPMjMU6AVDvSRHCLADY8'; // Replace with your key
 
-    function extractFolderId(url) {
-      const match = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-      return match ? match[1] : null;
+    // Google Workspace native MIME types that need /export instead of alt=media,
+    // mapped to a reasonable export format + file extension.
+    const EXPORT_MAP = {
+      'application/vnd.google-apps.document': {
+        mime: 'application/pdf',
+        ext: '.pdf'
+      },
+      'application/vnd.google-apps.spreadsheet': {
+        mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ext: '.xlsx'
+      },
+      'application/vnd.google-apps.presentation': {
+        mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ext: '.pptx'
+      },
+      'application/vnd.google-apps.drawing': {
+        mime: 'image/png',
+        ext: '.png'
+      }
+    };
+
+    const FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+    function extractFolderId(input) {
+      const trimmed = input.trim();
+
+      // Handles:
+      //  - https://drive.google.com/drive/folders/ID
+      //  - https://drive.google.com/drive/folders/ID?usp=drive_link
+      //  - https://drive.google.com/drive/u/0/folders/ID (with a /u/0/, /u/1/, etc.)
+      //  - https://drive.google.com/drive/folders/ID/ (trailing slash / extra path)
+      //  - https://drive.google.com/open?id=ID
+      //  - a bare folder ID pasted with no URL at all
+      const patterns = [
+        /\/folders\/([a-zA-Z0-9_-]+)/,   // .../folders/ID...
+        /[?&]id=([a-zA-Z0-9_-]+)/        // open?id=ID
+      ];
+
+      for (const pattern of patterns) {
+        const match = trimmed.match(pattern);
+        if (match) return match[1];
+      }
+
+      // No URL pattern matched — if it looks like a bare Drive ID
+      // (Drive IDs are typically 25+ alphanumeric/_/- chars, no slashes or spaces), accept it as-is.
+      if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) {
+        return trimmed;
+      }
+
+      return null;
+    }
+
+    // Escape any text before it goes into innerHTML, to avoid XSS via crafted file names.
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
     }
 
     async function listFiles() {
       const folderUrl = document.getElementById('folderLink').value.trim();
       const folderId = extractFolderId(folderUrl);
       const status = document.getElementById('status');
+      const loading = document.getElementById('loading');
       const output = document.getElementById('fileList');
       const controls = document.getElementById('controls');
       status.textContent = '';
@@ -91,32 +164,76 @@
         return;
       }
 
-      const endpoint = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&key=${API_KEY}&fields=files(id,name,mimeType)`;
+      loading.style.display = 'block';
 
       try {
-        const res = await fetch(endpoint);
-        const data = await res.json();
+        const allFiles = await fetchAllFiles(folderId);
 
-        if (!data.files || data.files.length === 0) {
+        loading.style.display = 'none';
+
+        if (allFiles.length === 0) {
           status.textContent = 'No public files found.';
           return;
         }
 
         controls.style.display = 'flex';
 
-        data.files.forEach(file => {
+        allFiles.forEach(file => {
+          const isFolder = file.mimeType === FOLDER_MIME;
+          const safeName = escapeHtml(file.name);
+
           const div = document.createElement('div');
           div.className = 'file';
-          div.innerHTML = `
-            <input type="checkbox" class="fileCheckbox" data-id="${file.id}" data-name="${file.name}">
-            <div class="file-name">${file.name}</div>
-          `;
+
+          if (isFolder) {
+            // Folders have no downloadable content via alt=media, so don't
+            // offer a checkbox for them — just list them for visibility.
+            div.innerHTML = `
+              <span style="flex:0 0 20px;"></span>
+              <div class="file-name folder">${safeName} (folder — not downloadable here)</div>
+            `;
+          } else {
+            div.innerHTML = `
+              <input type="checkbox" class="fileCheckbox" data-id="${file.id}" data-name="${safeName}" data-mime="${escapeHtml(file.mimeType)}">
+              <div class="file-name">${safeName}</div>
+              <div class="file-status" id="status-${file.id}"></div>
+            `;
+          }
           output.appendChild(div);
         });
       } catch (err) {
+        loading.style.display = 'none';
         status.textContent = 'Error fetching files.';
         console.error(err);
       }
+    }
+
+    // Fetches every page of results for the folder, following nextPageToken.
+    async function fetchAllFiles(folderId) {
+      let allFiles = [];
+      let pageToken = null;
+
+      do {
+        let endpoint = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&key=${API_KEY}&fields=nextPageToken,files(id,name,mimeType)&pageSize=1000`;
+        if (pageToken) {
+          endpoint += `&pageToken=${encodeURIComponent(pageToken)}`;
+        }
+
+        const res = await fetch(endpoint);
+        const data = await res.json();
+
+        if (data.error) {
+          throw new Error(data.error.message || 'API error');
+        }
+
+        if (data.files) {
+          allFiles = allFiles.concat(data.files);
+        }
+
+        pageToken = data.nextPageToken || null;
+      } while (pageToken);
+
+      return allFiles;
     }
 
     function toggleSelectAll() {
@@ -131,25 +248,49 @@
         return;
       }
 
-      for (const cb of selected) {
-        const fileId = cb.dataset.id;
-        const fileName = cb.dataset.name;
-        await downloadFile(fileId, fileName);
-      }
+      // Download concurrently rather than one-at-a-time.
+      await Promise.all(
+        Array.from(selected).map(cb =>
+          downloadFile(cb.dataset.id, cb.dataset.name, cb.dataset.mime)
+        )
+      );
     }
 
-    async function downloadFile(fileId, fileName) {
-      const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}`;
+    async function downloadFile(fileId, fileName, mimeType) {
+      const statusEl = document.getElementById(`status-${fileId}`);
+      if (statusEl) statusEl.textContent = 'Downloading…';
+
+      const exportInfo = EXPORT_MAP[mimeType];
+      let url;
+      let finalName = fileName;
+
+      if (exportInfo) {
+        // Native Google file (Docs/Sheets/Slides/Drawings) — must use /export,
+        // alt=media will fail since there's no raw binary to fetch.
+        url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent(exportInfo.mime)}&key=${API_KEY}`;
+        if (!finalName.toLowerCase().endsWith(exportInfo.ext)) {
+          finalName += exportInfo.ext;
+        }
+      } else {
+        url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}`;
+      }
+
       try {
         const res = await fetch(url);
-        if (!res.ok) throw new Error('Download failed');
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => null);
+          throw new Error(errBody?.error?.message || `HTTP ${res.status}`);
+        }
         const blob = await res.blob();
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = fileName;
+        a.download = finalName;
         a.click();
+        URL.revokeObjectURL(a.href);
+        if (statusEl) statusEl.textContent = 'Done';
       } catch (err) {
-        alert(`Failed to download ${fileName}`);
+        if (statusEl) statusEl.textContent = 'Failed';
+        alert(`Failed to download ${fileName}: ${err.message}`);
         console.error(err);
       }
     }
