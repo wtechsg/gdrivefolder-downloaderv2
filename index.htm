@@ -315,7 +315,11 @@
         // the API to receive a malformed query and return empty results.
         const query = `'${folderId}' in parents and trashed = false`;
         const encodedQuery = encodeURIComponent(query).replace(/'/g, '%27');
-        let endpoint = `https://www.googleapis.com/drive/v3/files?q=${encodedQuery}&key=${API_KEY}&fields=nextPageToken,files(id,name,mimeType)&pageSize=1000`;
+        // includeItemsFromAllDrives + supportsAllDrives are required for the API
+        // to search inside Shared Drives (Team Drives). Without these, the API
+        // silently returns empty results for any folder that lives in a Shared
+        // Drive rather than a personal My Drive, even if it's publicly shared.
+        let endpoint = `https://www.googleapis.com/drive/v3/files?q=${encodedQuery}&key=${API_KEY}&fields=nextPageToken,files(id,name,mimeType)&pageSize=1000&includeItemsFromAllDrives=true&supportsAllDrives=true`;
         if (pageToken) {
           endpoint += `&pageToken=${encodeURIComponent(pageToken)}`;
         }
@@ -323,9 +327,9 @@
         const res = await fetch(endpoint);
         const data = await res.json();
 
-        // DEBUG: show raw API response visibly on the page
+        // DEBUG: show the endpoint URL and raw API response visibly on the page
         const debugEl = document.getElementById('debug');
-        if (debugEl) debugEl.textContent = 'API response: ' + JSON.stringify(data, null, 2);
+        if (debugEl) debugEl.textContent = 'Endpoint: ' + endpoint + '\n\nAPI response: ' + JSON.stringify(data, null, 2);
 
         if (data.error) {
           throw new Error(`API error ${data.error.code}: ${data.error.message}`);
@@ -372,12 +376,12 @@
       if (exportInfo) {
         // Native Google file (Docs/Sheets/Slides/Drawings) — must use /export,
         // alt=media will fail since there's no raw binary to fetch.
-        url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent(exportInfo.mime)}&key=${API_KEY}`;
+        url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent(exportInfo.mime)}&key=${API_KEY}&supportsAllDrives=true`;
         if (!finalName.toLowerCase().endsWith(exportInfo.ext)) {
           finalName += exportInfo.ext;
         }
       } else {
-        url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}`;
+        url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}&supportsAllDrives=true`;
       }
 
       try {
@@ -400,6 +404,6 @@
       }
     }
   </script>
-  <p style="margin-top:30px; font-size:11px; color:#bbb; text-align:center;">Build: folder-nav-v3-debug</p>
+  <p style="margin-top:30px; font-size:11px; color:#bbb; text-align:center;">Build: folder-nav-v5-debug</p>
 </body>
 </html>
