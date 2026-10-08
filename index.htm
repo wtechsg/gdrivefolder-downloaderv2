@@ -103,7 +103,7 @@
   </style>
 </head>
 <body>
-  <h2>Google Drive Folder Downloader</h2>
+  <h2>Google Drive Folder DownloaderZ</h2>
   <p>Paste a <strong>public shared Google Drive folder link</strong> below:</p>
   <input id="folderLink" type="text" placeholder="https://drive.google.com/drive/folders/FOLDER_ID" />
   <button onclick="listFiles()">List Files</button>
@@ -263,7 +263,7 @@
         });
       } catch (err) {
         loading.style.display = 'none';
-        status.textContent = 'Error fetching files.';
+        status.textContent = `Error: ${err.message}`;
         console.error(err);
       }
     }
@@ -319,7 +319,7 @@
         const data = await res.json();
 
         if (data.error) {
-          throw new Error(data.error.message || 'API error');
+          throw new Error(`API error ${data.error.code}: ${data.error.message}`);
         }
 
         if (data.files) {
