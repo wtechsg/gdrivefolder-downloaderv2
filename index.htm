@@ -120,7 +120,7 @@
   <div id="fileList"></div>
 
   <script>
-    const API_KEY = 'AIzaSyA-MD2LyqhzFQ0QPMjMU6AVDvSRHCLADY8'; // Replace with your key
+    const API_KEY = 'XXXXXX'; // Replace with your key
 
     // Google Workspace native MIME types that need /export instead of alt=media,
     // mapped to a reasonable export format + file extension.
@@ -309,7 +309,8 @@
       let pageToken = null;
 
       do {
-        let endpoint = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&key=${API_KEY}&fields=nextPageToken,files(id,name,mimeType)&pageSize=1000`;
+        const query = `'${folderId}' in parents and trashed = false`;
+        let endpoint = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&key=${API_KEY}&fields=nextPageToken,files(id,name,mimeType)&pageSize=1000`;
         if (pageToken) {
           endpoint += `&pageToken=${encodeURIComponent(pageToken)}`;
         }
