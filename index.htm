@@ -117,7 +117,7 @@
 
   <div id="breadcrumbs"></div>
   <div id="fileList"></div>
-  <pre id="debug" style="margin-top:20px;text-align:left;font-size:11px;color:#333;background:#f5f5f5;padding:10px;border-radius:4px;white-space:pre-wrap;word-break:break-all;display:block;"></pre>
+
 
   <script>
     const API_KEY = 'AIzaSyA-MD2LyqhzFQ0QPMjMU6AVDvSRHCLADY8'; // Replace with your key
@@ -327,10 +327,6 @@
         const res = await fetch(endpoint);
         const data = await res.json();
 
-        // DEBUG: show the endpoint URL and raw API response visibly on the page
-        const debugEl = document.getElementById('debug');
-        if (debugEl) debugEl.textContent = 'Endpoint: ' + endpoint + '\n\nAPI response: ' + JSON.stringify(data, null, 2);
-
         if (data.error) {
           throw new Error(`API error ${data.error.code}: ${data.error.message}`);
         }
@@ -404,6 +400,6 @@
       }
     }
   </script>
-  <p style="margin-top:30px; font-size:11px; color:#bbb; text-align:center;">Build: folder-nav-v5-debug</p>
+  <p style="margin-top:30px; font-size:11px; color:#bbb; text-align:center;">Build: folder-nav-v5</p>
 </body>
 </html>
