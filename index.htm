@@ -103,7 +103,7 @@
   </style>
 </head>
 <body>
-  <h2>Google Drive Folder DownloaderZ</h2>
+  <h2>Google Drive Folder Downloader</h2>
   <p>Paste a <strong>public shared Google Drive folder link</strong> below:</p>
   <input id="folderLink" type="text" placeholder="https://drive.google.com/drive/folders/FOLDER_ID" />
   <button onclick="listFiles()">List Files</button>
@@ -309,8 +309,13 @@
       let pageToken = null;
 
       do {
+        // Encode the full query, then additionally encode single quotes (%27)
+        // since unencoded single quotes in a URL query string can be silently
+        // stripped by proxies, CSPs, or SharePoint's iframe sandbox — causing
+        // the API to receive a malformed query and return empty results.
         const query = `'${folderId}' in parents and trashed = false`;
-        let endpoint = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&key=${API_KEY}&fields=nextPageToken,files(id,name,mimeType)&pageSize=1000`;
+        const encodedQuery = encodeURIComponent(query).replace(/'/g, '%27');
+        let endpoint = `https://www.googleapis.com/drive/v3/files?q=${encodedQuery}&key=${API_KEY}&fields=nextPageToken,files(id,name,mimeType)&pageSize=1000`;
         if (pageToken) {
           endpoint += `&pageToken=${encodeURIComponent(pageToken)}`;
         }
@@ -391,6 +396,6 @@
       }
     }
   </script>
-  <p style="margin-top:30px; font-size:11px; color:#bbb; text-align:center;">Build: folder-nav-v2</p>
+  <p style="margin-top:30px; font-size:11px; color:#bbb; text-align:center;">Build: folder-nav-v3</p>
 </body>
 </html>
