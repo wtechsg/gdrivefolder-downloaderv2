@@ -2,262 +2,315 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Google Drive Folder Downloader</title>
+  <title>Google Drive Downloader</title>
   <style>
+    * { box-sizing: border-box; }
+
     body {
       font-family: Arial, sans-serif;
-      max-width: 600px;
-      margin: 50px auto;
+      max-width: 640px;
+      margin: 0 auto;
       text-align: center;
+      padding: 0 16px 40px;
     }
 
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      font-size: 16px;
+    nav {
+      position: sticky;
+      top: 0;
+      background: #1a73e8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 52px;
+      z-index: 999;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      margin: 0 -16px;
     }
+    nav .nav-title { color: white; font-size: 15px; font-weight: bold; }
+    nav .nav-version {
+      background: rgba(255,255,255,0.2);
+      color: white; font-size: 11px;
+      padding: 3px 8px; border-radius: 10px; letter-spacing: 0.5px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid #e0e0e0;
+      margin: 20px 0 0;
+    }
+    .tab {
+      flex: 1; padding: 10px; cursor: pointer;
+      font-size: 14px; font-weight: bold; color: #888;
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+    .tab-panel { display: none; padding-top: 16px; }
+    .tab-panel.active { display: block; }
+
+    input, button { width: 100%; padding: 10px; margin: 8px 0; font-size: 15px; }
+    button { cursor: pointer; }
 
     .controls {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 10px;
+      display: flex; justify-content: space-between;
+      align-items: center; margin-top: 10px;
     }
 
-    #fileList {
-      margin-top: 20px;
-      text-align: left;
-    }
+    #fileList { margin-top: 16px; text-align: left; }
 
     .file {
-      display: flex;
-      align-items: center;
-      border-bottom: 1px solid #eee;
-      padding: 6px 0;
+      display: flex; align-items: center;
+      border-bottom: 1px solid #eee; padding: 6px 0;
     }
-
-    .file input[type="checkbox"] {
-      flex: 0 0 20px;
-      margin-right: 10px;
-    }
-
+    .file input[type="checkbox"] { flex: 0 0 20px; margin-right: 10px; }
     .file-name {
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      flex: 1; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; text-align: left;
     }
+    .file-name.folder { color: #1a73e8; cursor: pointer; }
+    .file-name.folder:hover { text-decoration: underline; }
+    .file.folder-row { background: #eef4ff; cursor: pointer; }
+    .file.folder-row:hover { background: #ddeeff; }
 
-    .file-name.folder {
-      color: #1a73e8;
-      font-style: normal;
-      cursor: pointer;
-    }
+    .file-status { flex: 0 0 auto; font-size: 12px; color: #888; margin-left: 8px; }
 
-    .file-name.folder:hover {
-      text-decoration: underline;
+    /* Preview button */
+    .preview-btn {
+      flex: 0 0 auto; background: none;
+      border: 1px solid #1a73e8; color: #1a73e8;
+      border-radius: 4px; font-size: 12px;
+      padding: 2px 7px; margin-left: 6px;
+      cursor: pointer; width: auto; margin-top: 0;
     }
+    .preview-btn:hover { background: #eef4ff; }
 
-    .file.folder-row:hover {
-      background: #f5f8ff;
-      cursor: pointer;
-    }
+    #breadcrumbs { text-align: left; margin-top: 12px; font-size: 14px; color: #555; }
+    #breadcrumbs .crumb { color: #1a73e8; cursor: pointer; }
+    #breadcrumbs .crumb:hover { text-decoration: underline; }
+    #breadcrumbs .sep { margin: 0 6px; color: #aaa; }
 
-    #breadcrumbs {
-      text-align: left;
-      margin-top: 16px;
-      font-size: 14px;
-      color: #555;
-    }
+    .error { color: red; font-size: 14px; }
+    .info  { color: #555; font-size: 14px; }
+    #loading { display: none; color: #666; margin: 8px 0; }
+    #singleStatus { font-size: 14px; margin-top: 4px; }
 
-    #breadcrumbs .crumb {
-      color: #1a73e8;
-      cursor: pointer;
+    /* Preview Modal */
+    #previewModal {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65); z-index: 9999;
+      align-items: center; justify-content: center;
     }
+    #previewModal.open { display: flex; }
 
-    #breadcrumbs .crumb:hover {
-      text-decoration: underline;
+    .modal-box {
+      background: white; border-radius: 8px;
+      width: 90%; max-width: 820px; max-height: 90vh;
+      display: flex; flex-direction: column;
+      overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
     }
-
-    #breadcrumbs .sep {
-      margin: 0 6px;
-      color: #aaa;
+    .modal-header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid #eee; min-height: 52px;
     }
-
-    .file-status {
-      flex: 0 0 auto;
-      font-size: 12px;
-      color: #888;
-      margin-left: 8px;
+    .modal-title {
+      font-size: 14px; font-weight: bold; color: #333;
+      overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; flex: 1; margin-right: 12px; text-align: left;
     }
-
-    .error {
-      color: red;
+    .modal-close {
+      flex: 0 0 auto; background: none; border: none;
+      font-size: 22px; cursor: pointer; color: #555;
+      width: auto; margin: 0; padding: 0 4px; line-height: 1;
     }
-
-    #loading {
-      display: none;
-      color: #666;
+    .modal-body {
+      flex: 1; overflow: auto; display: flex;
+      align-items: center; justify-content: center;
+      background: #f8f8f8; min-height: 300px;
     }
+    .modal-body img { max-width: 100%; max-height: 75vh; object-fit: contain; }
+    .modal-body iframe { width: 100%; height: 75vh; border: none; }
+    .modal-body video { max-width: 100%; max-height: 75vh; }
+    .modal-body audio { width: 90%; margin: 40px auto; display: block; }
+    .modal-no-preview { color: #888; font-size: 14px; padding: 40px; }
+    .modal-loading    { color: #555; font-size: 14px; padding: 40px; }
+    .modal-footer {
+      padding: 10px 16px; border-top: 1px solid #eee; text-align: right;
+    }
+    .modal-footer button {
+      width: auto; padding: 8px 20px; font-size: 14px;
+      background: #1a73e8; color: white;
+      border: none; border-radius: 4px; cursor: pointer; margin: 0;
+    }
+    .modal-footer button:hover { background: #1558c0; }
   </style>
 </head>
 <body>
-  <h2>Google Drive Folder Downloader</h2>
-  <p>Paste a <strong>public shared Google Drive folder link</strong> below:</p>
-  <input id="folderLink" type="text" placeholder="https://drive.google.com/drive/folders/FOLDER_ID" />
-  <button onclick="listFiles()">List Files</button>
-  <p id="status" class="error"></p>
-  <p id="loading">Loading files…</p>
 
-  <div id="controls" class="controls" style="display:none;">
-    <label><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> Select All</label>
-    <button onclick="downloadSelected()">Download Selected Files</button>
+  <nav>
+    <span class="nav-title">📁 Google Drive Downloader</span>
+    <span class="nav-version">v6</span>
+  </nav>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('folder')">📁 Folder Download</div>
+    <div class="tab"        onclick="switchTab('file')">📄 Single File Download</div>
   </div>
 
-  <div id="breadcrumbs"></div>
-  <div id="fileList"></div>
+  <!-- ══════════════ FOLDER TAB ══════════════ -->
+  <div id="tab-folder" class="tab-panel active">
+    <p>Paste a <strong>public shared Google Drive folder link</strong> below:</p>
+    <input id="folderLink" type="text" placeholder="https://drive.google.com/drive/folders/FOLDER_ID" />
+    <button onclick="listFiles()">List Files</button>
+    <p id="folderStatus" class="error"></p>
+    <p id="loading">Loading files…</p>
 
+    <div id="controls" class="controls" style="display:none;">
+      <label><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> Select All</label>
+      <button onclick="downloadSelected()">Download Selected Files</button>
+    </div>
+
+    <div id="breadcrumbs"></div>
+    <div id="fileList"></div>
+  </div>
+
+  <!-- ══════════════ SINGLE FILE TAB ══════════════ -->
+  <div id="tab-file" class="tab-panel">
+    <p>Paste a <strong>public shared Google Drive file link</strong> below:</p>
+    <input id="fileLink" type="text" placeholder="https://drive.google.com/file/d/FILE_ID/view?usp=sharing" />
+    <button id="downloadBtn" onclick="downloadSingleFile()">Download File</button>
+    <p id="singleStatus"></p>
+  </div>
+
+  <!-- ══════════════ PREVIEW MODAL ══════════════ -->
+  <div id="previewModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle"></div>
+        <button class="modal-close" onclick="closePreview()">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <div class="modal-loading">Loading preview…</div>
+      </div>
+      <div class="modal-footer">
+        <button id="modalDownloadBtn">⬇ Download</button>
+      </div>
+    </div>
+  </div>
 
   <script>
-    const API_KEY = 'AIzaSyA-MD2LyqhzFQ0QPMjMU6AVDvSRHCLADY8'; // Replace with your key
+    const API_KEY = 'AIzaSyA-MD2LyqhzFQ0QPMjMU6AVDvSRHCLADY8'; // ← Replace with your key
 
-    // Google Workspace native MIME types that need /export instead of alt=media,
-    // mapped to a reasonable export format + file extension.
+    // ── Tab switching ──────────────────────────────────────────────
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach((t, i) =>
+        t.classList.toggle('active', ['folder','file'][i] === name)
+      );
+      document.querySelectorAll('.tab-panel').forEach(p =>
+        p.classList.toggle('active', p.id === `tab-${name}`)
+      );
+    }
+
+    // ── Shared constants ───────────────────────────────────────────
     const EXPORT_MAP = {
-      'application/vnd.google-apps.document': {
-        mime: 'application/pdf',
-        ext: '.pdf'
-      },
-      'application/vnd.google-apps.spreadsheet': {
-        mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ext: '.xlsx'
-      },
-      'application/vnd.google-apps.presentation': {
-        mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        ext: '.pptx'
-      },
-      'application/vnd.google-apps.drawing': {
-        mime: 'image/png',
-        ext: '.png'
-      }
+      'application/vnd.google-apps.document':     { mime: 'application/pdf', ext: '.pdf' },
+      'application/vnd.google-apps.spreadsheet':  { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: '.xlsx' },
+      'application/vnd.google-apps.presentation': { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ext: '.pptx' },
+      'application/vnd.google-apps.drawing':      { mime: 'image/png', ext: '.png' },
     };
-
     const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-    // Breadcrumb trail: array of { id, name }. The first entry is always the root folder
-    // the user originally pasted in.
-    let breadcrumbTrail = [];
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
 
+    // ── ID extractors ──────────────────────────────────────────────
     function extractFolderId(input) {
-      const trimmed = input.trim();
-
-      // Handles:
-      //  - https://drive.google.com/drive/folders/ID
-      //  - https://drive.google.com/drive/folders/ID?usp=drive_link
-      //  - https://drive.google.com/drive/u/0/folders/ID (with a /u/0/, /u/1/, etc.)
-      //  - https://drive.google.com/drive/folders/ID/ (trailing slash / extra path)
-      //  - https://drive.google.com/open?id=ID
-      //  - a bare folder ID pasted with no URL at all
-      const patterns = [
-        /\/folders\/([a-zA-Z0-9_-]+)/,   // .../folders/ID...
-        /[?&]id=([a-zA-Z0-9_-]+)/        // open?id=ID
-      ];
-
-      for (const pattern of patterns) {
-        const match = trimmed.match(pattern);
-        if (match) return match[1];
+      const t = input.trim();
+      for (const p of [/\/folders\/([a-zA-Z0-9_-]+)/, /[?&]id=([a-zA-Z0-9_-]+)/]) {
+        const m = t.match(p); if (m) return m[1];
       }
-
-      // No URL pattern matched — if it looks like a bare Drive ID
-      // (Drive IDs are typically 25+ alphanumeric/_/- chars, no slashes or spaces), accept it as-is.
-      if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) {
-        return trimmed;
-      }
-
+      if (/^[a-zA-Z0-9_-]{10,}$/.test(t)) return t;
       return null;
     }
 
-    // Escape any text before it goes into innerHTML, to avoid XSS via crafted file names.
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
+    function extractFileId(input) {
+      const t = input.trim();
+      for (const p of [/\/file\/d\/([a-zA-Z0-9_-]+)/, /[?&]id=([a-zA-Z0-9_-]+)/]) {
+        const m = t.match(p); if (m) return m[1];
+      }
+      if (/^[a-zA-Z0-9_-]{25,}$/.test(t)) return t;
+      return null;
     }
 
-    async function listFiles() {
-      const folderUrl = document.getElementById('folderLink').value.trim();
-      const folderId = extractFolderId(folderUrl);
+    // ══════════════ FOLDER LOGIC ══════════════════════════════════
+    let breadcrumbTrail = [];
 
+    async function listFiles() {
+      const folderId = extractFolderId(document.getElementById('folderLink').value);
       if (!folderId) {
-        document.getElementById('status').textContent = 'Invalid folder link.';
+        document.getElementById('folderStatus').textContent = 'Invalid folder link.';
         return;
       }
-
       breadcrumbTrail = [{ id: folderId, name: 'Root' }];
       await openFolder(folderId);
     }
 
-    // Navigates into a given folder ID: fetches its contents and re-renders
-    // the list + breadcrumbs. Used both for the initial root folder and for
-    // any subfolder the user clicks into.
     async function openFolder(folderId) {
-      const status = document.getElementById('status');
-      const loading = document.getElementById('loading');
-      const output = document.getElementById('fileList');
+      const status   = document.getElementById('folderStatus');
+      const loading  = document.getElementById('loading');
+      const output   = document.getElementById('fileList');
       const controls = document.getElementById('controls');
 
       status.textContent = '';
       output.innerHTML = '';
       controls.style.display = 'none';
       renderBreadcrumbs();
-
       loading.style.display = 'block';
 
       try {
         const allItems = await fetchAllFiles(folderId);
-
         loading.style.display = 'none';
 
-        if (allItems.length === 0) {
-          status.textContent = 'This folder is empty.';
-          return;
-        }
+        if (!allItems.length) { status.textContent = 'This folder is empty.'; return; }
 
-        const hasDownloadableFiles = allItems.some(f => f.mimeType !== FOLDER_MIME);
-        controls.style.display = hasDownloadableFiles ? 'flex' : 'none';
+        controls.style.display = allItems.some(f => f.mimeType !== FOLDER_MIME) ? 'flex' : 'none';
 
-        // Folders first, then files, each alphabetical — matches how Drive's own UI sorts.
         allItems.sort((a, b) => {
-          const aFolder = a.mimeType === FOLDER_MIME;
-          const bFolder = b.mimeType === FOLDER_MIME;
-          if (aFolder !== bFolder) return aFolder ? -1 : 1;
+          const af = a.mimeType === FOLDER_MIME, bf = b.mimeType === FOLDER_MIME;
+          if (af !== bf) return af ? -1 : 1;
           return a.name.localeCompare(b.name);
         });
 
         allItems.forEach(file => {
           const isFolder = file.mimeType === FOLDER_MIME;
           const safeName = escapeHtml(file.name);
-
           const div = document.createElement('div');
           div.className = isFolder ? 'file folder-row' : 'file';
 
           if (isFolder) {
-            // Clicking a folder row navigates into it instead of offering a checkbox,
-            // since folders have no downloadable bytes of their own.
             div.innerHTML = `
-              <span style="flex:0 0 24px; font-size:18px;">📁</span>
+              <span style="flex:0 0 24px;font-size:18px;">📁</span>
               <div class="file-name folder">${safeName}</div>
-              <span style="flex:0 0 auto; font-size:11px; font-weight:bold; color:#1a73e8; border:1px solid #1a73e8; border-radius:4px; padding:2px 6px; margin-left:8px;">FOLDER — CLICK TO OPEN</span>
-            `;
+              <span style="flex:0 0 auto;font-size:11px;font-weight:bold;color:#1a73e8;border:1px solid #1a73e8;border-radius:4px;padding:2px 6px;margin-left:8px;">FOLDER — CLICK TO OPEN</span>`;
             div.style.background = '#eef4ff';
             div.addEventListener('click', () => navigateInto(file.id, file.name));
           } else {
             div.innerHTML = `
               <input type="checkbox" class="fileCheckbox" data-id="${file.id}" data-name="${safeName}" data-mime="${escapeHtml(file.mimeType)}">
               <div class="file-name">${safeName}</div>
-              <div class="file-status" id="status-${file.id}"></div>
-            `;
+              <button class="preview-btn" data-id="${file.id}" data-name="${safeName}" data-mime="${escapeHtml(file.mimeType)}">👁 Preview</button>
+              <div class="file-status" id="status-${file.id}"></div>`;
+
+            // Attach preview handler after DOM insertion
+            div.querySelector('.preview-btn').addEventListener('click', e => {
+              e.stopPropagation();
+              openPreview(file.id, file.name, file.mimeType);
+            });
           }
           output.appendChild(div);
         });
@@ -268,76 +321,42 @@
       }
     }
 
-    // Pushes a folder onto the breadcrumb trail and opens it.
-    async function navigateInto(folderId, folderName) {
-      breadcrumbTrail.push({ id: folderId, name: folderName });
-      await openFolder(folderId);
+    async function navigateInto(id, name) {
+      breadcrumbTrail.push({ id, name });
+      await openFolder(id);
     }
 
-    // Jumps back to a specific point in the breadcrumb trail (truncating anything after it).
     async function navigateToBreadcrumb(index) {
       breadcrumbTrail = breadcrumbTrail.slice(0, index + 1);
       await openFolder(breadcrumbTrail[index].id);
     }
 
     function renderBreadcrumbs() {
-      const container = document.getElementById('breadcrumbs');
-      if (breadcrumbTrail.length === 0) {
-        container.innerHTML = '';
-        return;
-      }
-
-      container.innerHTML = breadcrumbTrail
-        .map((crumb, i) => {
-          const safeName = escapeHtml(crumb.name);
-          const isLast = i === breadcrumbTrail.length - 1;
-          const crumbHtml = isLast
-            ? `<span>${safeName}</span>`
-            : `<span class="crumb" data-index="${i}">${safeName}</span>`;
-          return i === 0 ? crumbHtml : `<span class="sep">/</span>${crumbHtml}`;
-        })
-        .join('');
-
-      container.querySelectorAll('.crumb').forEach(el => {
-        el.addEventListener('click', () => navigateToBreadcrumb(parseInt(el.dataset.index, 10)));
-      });
+      const c = document.getElementById('breadcrumbs');
+      c.innerHTML = breadcrumbTrail.map((crumb, i) => {
+        const s = escapeHtml(crumb.name);
+        const last = i === breadcrumbTrail.length - 1;
+        const el = last ? `<span>${s}</span>` : `<span class="crumb" data-index="${i}">${s}</span>`;
+        return i === 0 ? el : `<span class="sep">/</span>${el}`;
+      }).join('');
+      c.querySelectorAll('.crumb').forEach(el =>
+        el.addEventListener('click', () => navigateToBreadcrumb(+el.dataset.index))
+      );
     }
 
-    // Fetches every page of results for the folder, following nextPageToken.
     async function fetchAllFiles(folderId) {
-      let allFiles = [];
-      let pageToken = null;
-
+      let allFiles = [], pageToken = null;
       do {
-        // Encode the full query, then additionally encode single quotes (%27)
-        // since unencoded single quotes in a URL query string can be silently
-        // stripped by proxies, CSPs, or SharePoint's iframe sandbox — causing
-        // the API to receive a malformed query and return empty results.
         const query = `'${folderId}' in parents and trashed = false`;
         const encodedQuery = encodeURIComponent(query).replace(/'/g, '%27');
-        // includeItemsFromAllDrives + supportsAllDrives are required for the API
-        // to search inside Shared Drives (Team Drives). Without these, the API
-        // silently returns empty results for any folder that lives in a Shared
-        // Drive rather than a personal My Drive, even if it's publicly shared.
         let endpoint = `https://www.googleapis.com/drive/v3/files?q=${encodedQuery}&key=${API_KEY}&fields=nextPageToken,files(id,name,mimeType)&pageSize=1000&includeItemsFromAllDrives=true&supportsAllDrives=true`;
-        if (pageToken) {
-          endpoint += `&pageToken=${encodeURIComponent(pageToken)}`;
-        }
-
-        const res = await fetch(endpoint);
+        if (pageToken) endpoint += `&pageToken=${encodeURIComponent(pageToken)}`;
+        const res  = await fetch(endpoint);
         const data = await res.json();
-
-        if (data.error) {
-          throw new Error(`API error ${data.error.code}: ${data.error.message}`);
-        }
-
-        if (data.files) {
-          allFiles = allFiles.concat(data.files);
-        }
-
+        if (data.error) throw new Error(`API error ${data.error.code}: ${data.error.message}`);
+        if (data.files) allFiles = allFiles.concat(data.files);
         pageToken = data.nextPageToken || null;
       } while (pageToken);
-
       return allFiles;
     }
 
@@ -347,59 +366,181 @@
     }
 
     async function downloadSelected() {
-      const selected = document.querySelectorAll('.fileCheckbox:checked');
-      if (selected.length === 0) {
-        alert("No files selected.");
-        return;
-      }
-
-      // Download concurrently rather than one-at-a-time.
-      await Promise.all(
-        Array.from(selected).map(cb =>
-          downloadFile(cb.dataset.id, cb.dataset.name, cb.dataset.mime)
-        )
-      );
+      const selected = [...document.querySelectorAll('.fileCheckbox:checked')];
+      if (!selected.length) { alert('No files selected.'); return; }
+      await Promise.all(selected.map(cb => downloadFile(cb.dataset.id, cb.dataset.name, cb.dataset.mime)));
     }
 
     async function downloadFile(fileId, fileName, mimeType) {
       const statusEl = document.getElementById(`status-${fileId}`);
       if (statusEl) statusEl.textContent = 'Downloading…';
-
       const exportInfo = EXPORT_MAP[mimeType];
-      let url;
-      let finalName = fileName;
+      let apiUrl, finalName = fileName;
 
       if (exportInfo) {
-        // Native Google file (Docs/Sheets/Slides/Drawings) — must use /export,
-        // alt=media will fail since there's no raw binary to fetch.
-        url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent(exportInfo.mime)}&key=${API_KEY}&supportsAllDrives=true`;
-        if (!finalName.toLowerCase().endsWith(exportInfo.ext)) {
-          finalName += exportInfo.ext;
-        }
+        apiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent(exportInfo.mime)}&key=${API_KEY}&supportsAllDrives=true`;
+        if (!finalName.toLowerCase().endsWith(exportInfo.ext)) finalName += exportInfo.ext;
       } else {
-        url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}&supportsAllDrives=true`;
+        apiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}&supportsAllDrives=true`;
       }
 
       try {
-        const res = await fetch(url);
+        const res = await fetch(apiUrl);
         if (!res.ok) {
           const errBody = await res.json().catch(() => null);
           throw new Error(errBody?.error?.message || `HTTP ${res.status}`);
         }
         const blob = await res.blob();
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = finalName;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        if (statusEl) statusEl.textContent = 'Done';
+        const objUrl = URL.createObjectURL(blob);
+        a.href = objUrl; a.download = finalName; a.style.display = 'none';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(objUrl);
+        if (statusEl) statusEl.textContent = 'Done ✓';
       } catch (err) {
-        if (statusEl) statusEl.textContent = 'Failed';
+        if (statusEl) statusEl.textContent = 'Failed ✗';
         alert(`Failed to download ${fileName}: ${err.message}`);
         console.error(err);
       }
     }
+
+    // ══════════════ SINGLE FILE LOGIC ════════════════════════════
+    function setSingleStatus(text, isError = false) {
+      const el = document.getElementById('singleStatus');
+      el.textContent = text;
+      el.className = isError ? 'error' : 'info';
+    }
+
+    async function downloadSingleFile() {
+      const input  = document.getElementById('fileLink').value.trim();
+      const btn    = document.getElementById('downloadBtn');
+      const fileId = extractFileId(input);
+      setSingleStatus('');
+
+      if (!fileId) { setSingleStatus('Invalid Google Drive file link.', true); return; }
+
+      btn.disabled = true;
+      setSingleStatus('Fetching file info…');
+
+      try {
+        const metaRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType&key=${API_KEY}&supportsAllDrives=true`
+        );
+        if (!metaRes.ok) {
+          const err = await metaRes.json().catch(() => null);
+          throw new Error(err?.error?.message || `Metadata fetch failed (${metaRes.status})`);
+        }
+        const meta = await metaRes.json();
+        const exportInfo = EXPORT_MAP[meta.mimeType];
+        let fileName = meta.name || 'downloaded-file';
+        let apiUrl;
+
+        if (exportInfo) {
+          apiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent(exportInfo.mime)}&key=${API_KEY}&supportsAllDrives=true`;
+          if (!fileName.toLowerCase().endsWith(exportInfo.ext)) fileName += exportInfo.ext;
+        } else {
+          apiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}&supportsAllDrives=true`;
+        }
+
+        setSingleStatus('Downloading…');
+        const res = await fetch(apiUrl);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(errText || `Download failed (${res.status})`);
+        }
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        const objUrl = URL.createObjectURL(blob);
+        a.href = objUrl; a.download = fileName; a.style.display = 'none';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(objUrl);
+        setSingleStatus('Download started ✓');
+      } catch (err) {
+        setSingleStatus(`Error: ${err.message}`, true);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ══════════════ PREVIEW LOGIC ════════════════════════════════
+    const IMAGE_TYPES = ['image/png','image/jpeg','image/gif','image/webp','image/svg+xml','image/bmp'];
+    const VIDEO_TYPES = ['video/mp4','video/webm','video/ogg'];
+    const AUDIO_TYPES = ['audio/mpeg','audio/ogg','audio/wav','audio/mp4','audio/webm'];
+
+    function getPreviewType(mimeType) {
+      if (IMAGE_TYPES.includes(mimeType)) return 'image';
+      if (VIDEO_TYPES.includes(mimeType)) return 'video';
+      if (AUDIO_TYPES.includes(mimeType)) return 'audio';
+      if (mimeType === 'application/pdf') return 'pdf';
+      if (mimeType === 'text/plain')      return 'text';
+      if (mimeType.startsWith('application/vnd.google-apps.')) return 'gdocs';
+      return 'none';
+    }
+
+    async function openPreview(fileId, fileName, mimeType) {
+      document.getElementById('modalTitle').textContent = fileName;
+      document.getElementById('modalBody').innerHTML = '<div class="modal-loading">Loading preview…</div>';
+      document.getElementById('previewModal').classList.add('open');
+      document.getElementById('modalDownloadBtn').onclick = () => downloadFile(fileId, fileName, mimeType);
+
+      const type = getPreviewType(mimeType);
+      const body = document.getElementById('modalBody');
+
+      if (type === 'gdocs') {
+        // Google Docs Viewer — export to PDF first, then embed
+        const pdfUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf&key=${API_KEY}&supportsAllDrives=true`;
+        const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`;
+        body.innerHTML = `<iframe src="${viewerUrl}" allowfullscreen></iframe>`;
+        return;
+      }
+
+      if (type === 'none') {
+        body.innerHTML = `<div class="modal-no-preview">No preview available for this file type.<br><small>${escapeHtml(mimeType)}</small></div>`;
+        return;
+      }
+
+      try {
+        const apiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}&supportsAllDrives=true`;
+        const res    = await fetch(apiUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob   = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+
+        if (type === 'image') {
+          body.innerHTML = `<img src="${objUrl}" alt="${escapeHtml(fileName)}">`;
+        } else if (type === 'video') {
+          body.innerHTML = `<video src="${objUrl}" controls autoplay style="max-width:100%;max-height:75vh;"></video>`;
+        } else if (type === 'audio') {
+          body.innerHTML = `<audio src="${objUrl}" controls autoplay></audio>`;
+        } else if (type === 'pdf') {
+          body.innerHTML = `<iframe src="${objUrl}"></iframe>`;
+        } else if (type === 'text') {
+          const text = await (await fetch(objUrl)).text();
+          const pre  = document.createElement('pre');
+          pre.style.cssText = 'text-align:left;padding:20px;font-size:13px;overflow:auto;max-height:70vh;white-space:pre-wrap;word-break:break-word;width:100%;';
+          pre.textContent = text;
+          body.innerHTML = '';
+          body.appendChild(pre);
+        }
+      } catch (err) {
+        body.innerHTML = `<div class="modal-no-preview">Failed to load preview: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function closePreview() {
+      document.getElementById('previewModal').classList.remove('open');
+      document.getElementById('modalBody').innerHTML = '';
+    }
+
+    // Close on backdrop click or Escape key
+    document.getElementById('previewModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('previewModal')) closePreview();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePreview(); });
+
+    // Enter key shortcuts
+    document.getElementById('folderLink').addEventListener('keydown', e => { if (e.key === 'Enter') listFiles(); });
+    document.getElementById('fileLink').addEventListener('keydown',   e => { if (e.key === 'Enter') downloadSingleFile(); });
   </script>
-  <p style="margin-top:30px; font-size:11px; color:#bbb; text-align:center;">Build: folder-nav-v5</p>
 </body>
 </html>
